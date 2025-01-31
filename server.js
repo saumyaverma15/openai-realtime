@@ -31,7 +31,9 @@ await server.register(FastifyVite, {
 await server.vite.ready();
 
 // Server-side API route to return an ephemeral realtime session token
-server.get("/token", async () => {
+server.get("/token", async (req, res) => {
+  const model_voice =  req.query.voice || "verse"; // Default to "default" if no voice is specified
+  const model_instructions = req.query.instruction || "You are very nice and friendly to everyone.";
   const r = await fetch("https://api.openai.com/v1/realtime/sessions", {
     method: "POST",
     headers: {
@@ -40,7 +42,8 @@ server.get("/token", async () => {
     },
     body: JSON.stringify({
       model: "gpt-4o-realtime-preview-2024-12-17",
-      voice: "verse",
+      voice: model_voice,
+      instructions: model_instructions,
     }),
   });
 

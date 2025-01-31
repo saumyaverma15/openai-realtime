@@ -3,6 +3,7 @@ import logo from "/assets/openai-logomark.svg";
 import EventLog from "./EventLog";
 import SessionControls from "./SessionControls";
 import ToolPanel from "./ToolPanel";
+import PromptEngineering from "./PromptEngineering";
 
 export default function App() {
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -10,10 +11,33 @@ export default function App() {
   const [dataChannel, setDataChannel] = useState(null);
   const peerConnection = useRef(null);
   const audioElement = useRef(null);
+  const [selectedVoice, setSelectedVoice] = useState("alloy");
+  const [textbox1Value, setTextbox1Value] = useState("");
+  const [textbox2Value, setTextbox2Value] = useState("");
+  const [disclosureLevel, setDisclosureLevel] = useState(""); 
+
+
 
   async function startSession() {
-    // Get an ephemeral key from the Fastify server
-    const tokenResponse = await fetch("/token");
+    //const instructions = "You are very sassy to everyone."
+
+    let disclosure = "";
+    if (disclosureLevel === "low") {
+      disclosure = "You should not be too open about your opinions and feelings. Do not reciporcate emotions or sentiments of the user. Restrict yourself to basic facts and information."
+    } else if (disclosureLevel === "medium") {
+      disclosure = "You should be somewhat open about your opinions and feelings. You can reciporcate emotions or sentiments of the user occasionally. Otherwise, restrict yourself to basic facts and information."
+    } else if (disclosureLevel === "high") {
+      disclosure = "You should be very open about your opinions and feelings. You can reciporcate emotions or sentiments of the user. Try to connect with the user on a personal level by providing personal anecdotes and experiences. Validate their feelings and pay attention to nuances in their speech."
+    } else {
+      // Disclosure is to match user
+      disclosure = "You should match the user's disclosure level. If the user is being emotional and sharing their feelings, be very open about your opinions and feelings. You can reciporcate emotions or sentiments of the user. If they are distant and do not share much, restrict yourself to basic facts and information."
+    }
+    const instructions = `
+      Your persona for this conversations is: ${textbox1Value}
+      When speaking display the following emotions: ${textbox2Value}
+      Additional instructions, regarding emotional disclosure: ${disclosure}
+    `;
+    const tokenResponse = await fetch(`/token?voice=${selectedVoice}&instruction=${instructions}`);
     const data = await tokenResponse.json();
     const EPHEMERAL_KEY = data.client_secret.value;
 
@@ -25,10 +49,7 @@ export default function App() {
     audioElement.current.autoplay = true;
     pc.ontrack = (e) => (audioElement.current.srcObject = e.streams[0]);
 
-    // Add local audio track for microphone input in the browser
-    const ms = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
+    const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
     pc.addTrack(ms.getTracks()[0]);
 
     // Set up data channel for sending and receiving events
@@ -41,7 +62,7 @@ export default function App() {
 
     const baseUrl = "https://api.openai.com/v1/realtime";
     const model = "gpt-4o-realtime-preview-2024-12-17";
-    const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+    const sdpResponse = await fetch(`${baseUrl}?model=${model}&voice=${selectedVoice}&instruction=${instructions}`, {
       method: "POST",
       body: offer.sdp,
       headers: {
@@ -87,6 +108,32 @@ export default function App() {
     }
   }
 
+  function handleVoiceSelection(voice) {
+    setSelectedVoice(voice);
+    //selectedVoice = voice;
+  }
+
+  function VoiceSelector({ handleVoiceSelection }) {
+    const voices = ["alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse"]; // Replace with actual voice options
+  
+    return (
+      <div className="voice-selector flex gap-4">
+      {voices.map((voice) => (
+        <button
+          key={voice}
+          className={`voice-button p-2 rounded-lg text-sm font-medium transition-colors 
+            ${voice === selectedVoice ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'} 
+            hover:bg-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          onClick={() => handleVoiceSelection(voice)}
+          title={`Select the ${voice} voice`} // Tooltip on hover
+        >
+          {voice}
+        </button>
+      ))}
+    </div>
+    );
+  }
+
   // Send a text message to the model
   function sendTextMessage(message) {
     const event = {
@@ -130,6 +177,7 @@ export default function App() {
           <img style={{ width: "24px" }} src={logo} />
           <h1>realtime console</h1>
         </div>
+        <VoiceSelector handleVoiceSelection={handleVoiceSelection} />
       </nav>
       <main className="absolute top-16 left-0 right-0 bottom-0">
         <section className="absolute top-0 left-0 right-[380px] bottom-0 flex">
@@ -147,15 +195,37 @@ export default function App() {
             />
           </section>
         </section>
-        <section className="absolute top-0 w-[380px] right-0 bottom-0 p-4 pt-0 overflow-y-auto">
-          <ToolPanel
-            sendClientEvent={sendClientEvent}
-            sendTextMessage={sendTextMessage}
-            events={events}
-            isSessionActive={isSessionActive}
-          />
+        
+        {/* Tool Panel with Top and Bottom Parts */}
+        <section className="absolute top-0 w-[375px] right-0 bottom-0 p-4 pt-0 overflow-y-auto">
+          {/* Top half of the ToolPanel */}
+          <div className="h-1/2 p-2">
+            <PromptEngineering
+              textbox1Value={textbox1Value}
+              setTextbox1Value={setTextbox1Value}
+              textbox2Value={textbox2Value}
+              setTextbox2Value={setTextbox2Value}
+              disclosureLevel={disclosureLevel}
+              setDisclosureLevel={setDisclosureLevel}
+              sendClientEvent={sendClientEvent}
+              sendTextMessage={sendTextMessage}
+              events={events}
+              isSessionActive={isSessionActive}
+            />
+          </div>
+          
+  
+          {/* Bottom half of the ToolPanel */}
+          <div className="h-1/2 p-2 mt-4">
+            <ToolPanel
+              sendClientEvent={sendClientEvent}
+              sendTextMessage={sendTextMessage}
+              events={events}
+              isSessionActive={isSessionActive}
+            />
+          </div>
         </section>
       </main>
     </>
   );
-}
+}  
